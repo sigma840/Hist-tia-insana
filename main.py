@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from telegram import Update
@@ -41,7 +40,6 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-
 # ── Smart message router ──────────────────────────────────────
 
 async def smart_message_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -53,7 +51,6 @@ async def smart_message_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await handle_guild_name(update, ctx)
     elif ctx.user_data.get("awaiting_price") or ctx.user_data.get("awaiting_trade"):
         await handle_sell_input(update, ctx)
-
 
 # ── Smart callback router ─────────────────────────────────────
 
@@ -77,11 +74,9 @@ async def smart_callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     elif data.startswith("build:"):      await cb_build(update, ctx)
     elif data.startswith("ranking:"):    await cmd_ranking(update, ctx)
 
-
 # ── Main ──────────────────────────────────────────────────────
 
-async def main():
-    await init_db()
+def main():
     app = Application.builder().token(TELEGRAM_TOKEN).build()
 
     # Commands
@@ -103,18 +98,19 @@ async def main():
     app.add_handler(CommandHandler("shop",         cmd_shop))
     app.add_handler(CommandHandler("build",        cmd_build))
 
-    # Single callback router
+    # Routers
     app.add_handler(CallbackQueryHandler(smart_callback_handler))
-
-    # Single message router
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_message_handler))
 
-    # World event scheduler
-    start_scheduler(app.bot)
+    # Startup tasks
+    app.post_init = lambda app: init_db()
+    app.post_init = lambda app: start_scheduler(app.bot)
 
     print("⚔️ Chronicler Bot is online!")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)
 
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+# ── Run ───────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
