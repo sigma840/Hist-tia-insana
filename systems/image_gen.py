@@ -1,7 +1,4 @@
-
-# ============================================================
-# systems/image_gen.py
-# ============================================================
+import aiohttp
 from urllib.parse import quote
 from config import POLLINATIONS_URL
 
@@ -17,3 +14,4 @@ async def generate_image(prompt: str):
     except Exception:
         pass
     return None
+
