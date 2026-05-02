@@ -361,14 +361,6 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
         session.current_narrative = narrative
         session.turn += 1
 
-        # Shorten narrative — ask Groq for concise output (max 800 chars displayed)
-        display_narrative = _truncate(narrative, 800)
-
-        img_url = await generate_image(
-            data.get("image_prompt") or narrative[:120]
-        )
-        session.current_image_url = img_url or ""
-
         if session.turn >= session.max_turns:
             await update.effective_chat.send_message(
                 "⏳ *The sands of time run out...*", parse_mode=ParseMode.MARKDOWN
@@ -378,22 +370,24 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
 
         await save_session(session)
 
-        # Send image WITH narrative as caption (max 1024 chars for caption)
-        turn_header   = f"📜 *Turn {session.turn}*\n\n"
-        full_caption  = turn_header + display_narrative
-        # If still too long for caption, trim further
-        safe_caption  = _truncate(full_caption, CAPTION_LIMIT)
+        # Always generate a fresh contextual image every turn
+        image_prompt = data.get("image_prompt") or narrative[:120]
+        img_url      = await generate_image(image_prompt)
+        session.current_image_url = img_url or ""
+        await save_session(session)
+
+        # Build caption: header + truncated narrative to fit Telegram's 1024 limit
+        display_narrative = _truncate(narrative, 850)
+        caption           = f"📜 *Turn {session.turn}*\n\n{display_narrative}"
+        safe_caption      = _truncate(caption, CAPTION_LIMIT)
 
         if img_url:
             await update.effective_chat.send_photo(
-                img_url,
-                caption=safe_caption,
-                parse_mode=ParseMode.MARKDOWN
+                img_url, caption=safe_caption, parse_mode=ParseMode.MARKDOWN
             )
         else:
             await update.effective_chat.send_message(
-                safe_caption,
-                parse_mode=ParseMode.MARKDOWN
+                safe_caption, parse_mode=ParseMode.MARKDOWN
             )
 
         # Alive item messages
@@ -519,9 +513,6 @@ async def cb_free_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tid    = query.from_user.id
     player = await load_player(tid)
     if not player:
-        await query.answer()
-        return
-    if player.free_actions_left <= 0:
         await query.answer("❌ No free actions left this session!", show_alert=True)
         return
 
