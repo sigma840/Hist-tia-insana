@@ -361,7 +361,9 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
         session.current_narrative = narrative
         session.turn += 1
 
-        img_url = await generate_image(data.get("image_prompt", "medieval fantasy scene"))
+        img_url = await generate_image(
+            data.get("image_prompt") or narrative[:120]
+        )
         session.current_image_url = img_url or ""
 
         if session.turn >= session.max_turns:
@@ -423,11 +425,12 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
 
 
 async def show_choices(update, ctx, session: Session, players: list, choices: list):
-    # Ensure fresh pending_actions
+    # Reset pending actions and store which turn these choices belong to
     session.pending_actions = {}
     await save_session(session)
 
-    ctx.bot_data[f"choices_{session.session_id}"] = choices
+    ctx.bot_data[f"choices_{session.session_id}"]      = choices
+    ctx.bot_data[f"choices_turn_{session.session_id}"] = session.turn  # track turn number
 
     buttons = [
         [InlineKeyboardButton(f"{i+1}. {_truncate(c, 50)}", callback_data=f"choice:{session.session_id}:{i}")]
@@ -435,10 +438,9 @@ async def show_choices(update, ctx, session: Session, players: list, choices: li
     ]
     buttons.append([InlineKeyboardButton("✍️ Free Action", callback_data=f"freeact:{session.session_id}")])
 
-    total   = len(session.players)
-    waiting = total - len(session.pending_actions)
+    total = len(session.players)
     await update.effective_chat.send_message(
-        f"⚔️ *What do you do?* (Waiting for {waiting}/{total} player(s))",
+        f"⚔️ *What do you do?* ({total} player(s) must act)",
         reply_markup=InlineKeyboardMarkup(buttons),
         parse_mode=ParseMode.MARKDOWN
     )
@@ -446,7 +448,6 @@ async def show_choices(update, ctx, session: Session, players: list, choices: li
 
 async def cb_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer("✅ Action registered!")
     _, sid, idx = query.data.split(":")
     tid = query.from_user.id
     idx = int(idx)
@@ -454,6 +455,7 @@ async def cb_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     session = await load_session(sid)
     player  = await load_player(tid)
     if not session or not player or tid not in session.players:
+        await query.answer("❌ Session not found.", show_alert=True)
         return
 
     # Ignore if this player already acted this turn
@@ -461,24 +463,42 @@ async def cb_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.answer("You already chose an action this turn!", show_alert=True)
         return
 
-    choices = ctx.bot_data.get(f"choices_{sid}", [])
-    if idx < len(choices):
-        chosen = choices[idx]
-        session.pending_actions[str(tid)] = chosen
-        session.history.append({"role": "user", "content": f"{player.char_name}: {chosen}"})
+    # Check this choice belongs to the current turn
+    turn_key = f"choices_turn_{sid}"
+    stored_turn = ctx.bot_data.get(turn_key, -1)
+    if stored_turn != session.turn:
+        await query.answer("⏳ This turn has already passed.", show_alert=True)
+        # Remove buttons from old message
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        return
 
+    choices = ctx.bot_data.get(f"choices_{sid}", [])
+    if idx >= len(choices):
+        await query.answer("❌ Invalid choice.", show_alert=True)
+        return
+
+    chosen = choices[idx]
+    session.pending_actions[str(tid)] = chosen
+    session.history.append({"role": "user", "content": f"{player.char_name}: {chosen}"})
     await save_session(session)
+
+    await query.answer("✅ Action registered!")
 
     waiting = len(session.players) - len(session.pending_actions)
     if waiting > 0:
+        # Edit message to show choice but REMOVE buttons so no one else can click
         await query.edit_message_text(
-            f"✅ *{player.char_name}* chose: _{_truncate(choices[idx], 80)}_\n\n"
+            f"✅ *{player.char_name}* chose: _{_truncate(chosen, 80)}_\n\n"
             f"⏳ Waiting for {waiting} more player(s)...",
             parse_mode=ParseMode.MARKDOWN
         )
     else:
+        # All acted — remove buttons and proceed
         await query.edit_message_text(
-            f"✅ All players have acted! Starting next turn...",
+            "✅ All players have acted\\! Starting next turn\\.\\.\\.",
             parse_mode=ParseMode.MARKDOWN
         )
         players = [p for p in [await load_player(t) for t in session.players] if p]
@@ -595,4 +615,4 @@ async def cb_perk(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await save_player(player)
     await query.edit_message_text(
         f"✨ *{player.char_name}* learned: *{perk}*!", parse_mode=ParseMode.MARKDOWN
-    )
+                          )
