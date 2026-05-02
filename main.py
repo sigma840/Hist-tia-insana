@@ -9,10 +9,10 @@ from telegram.ext import (
 
 from config import TELEGRAM_TOKEN
 from database.db import init_db
-from systems.world_events import start_scheduler_async  # ← importação corrigida
+from systems.world_events import start_scheduler_async
 
 from handlers.session import (
-    cmd_start, cb_pick_class, handle_name_input,
+    cmd_start, cmd_help, cb_pick_class, handle_name_input,
     cmd_new_session, cb_begin_adventure,
     cmd_join_session, cmd_end_session,
     cb_choice, cb_free_action, handle_free_action_input,
@@ -78,7 +78,7 @@ async def smart_callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     elif data.startswith("ranking:"):    await cmd_ranking(update, ctx)
 
 
-# ── post_init: arranca o scheduler DENTRO do event loop do PTB ─
+# ── post_init ─────────────────────────────────────────────────
 
 async def post_init(app: Application):
     await init_db()
@@ -92,12 +92,13 @@ def main():
     app = (
         Application.builder()
         .token(TELEGRAM_TOKEN)
-        .post_init(post_init)   # ← db + scheduler iniciam AQUI, dentro do loop
+        .post_init(post_init)
         .build()
     )
 
     # Commands
     app.add_handler(CommandHandler("start",        cmd_start))
+    app.add_handler(CommandHandler("help",         cmd_help))
     app.add_handler(CommandHandler("newsession",   cmd_new_session))
     app.add_handler(CommandHandler("joinsession",  cmd_join_session))
     app.add_handler(CommandHandler("endsession",   cmd_end_session))
@@ -119,7 +120,6 @@ def main():
     app.add_handler(CallbackQueryHandler(smart_callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_message_handler))
 
-    # Inicia o polling — este método gere o seu próprio event loop internamente
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
