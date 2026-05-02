@@ -9,7 +9,7 @@ from telegram.ext import (
 
 from config import TELEGRAM_TOKEN
 from database.db import init_db
-from systems.world_events import start_scheduler
+from systems.world_events import start_scheduler_async  # ← importação corrigida
 
 from handlers.session import (
     cmd_start, cb_pick_class, handle_name_input,
@@ -78,11 +78,23 @@ async def smart_callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     elif data.startswith("ranking:"):    await cmd_ranking(update, ctx)
 
 
+# ── post_init: arranca o scheduler DENTRO do event loop do PTB ─
+
+async def post_init(app: Application):
+    await init_db()
+    await start_scheduler_async(app.bot)
+    print("⚔️ Chronicler Bot is online!")
+
+
 # ── Main ──────────────────────────────────────────────────────
 
-async def main():
-    await init_db()
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+def main():
+    app = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .post_init(post_init)   # ← db + scheduler iniciam AQUI, dentro do loop
+        .build()
+    )
 
     # Commands
     app.add_handler(CommandHandler("start",        cmd_start))
@@ -103,18 +115,13 @@ async def main():
     app.add_handler(CommandHandler("shop",         cmd_shop))
     app.add_handler(CommandHandler("build",        cmd_build))
 
-    # Single callback router
+    # Routers
     app.add_handler(CallbackQueryHandler(smart_callback_handler))
-
-    # Single message router
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, smart_message_handler))
 
-    # World event scheduler
-    start_scheduler(app.bot)
-
-    print("⚔️ Chronicler Bot is online!")
-    await app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Inicia o polling — este método gere o seu próprio event loop internamente
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
