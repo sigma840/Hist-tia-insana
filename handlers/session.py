@@ -361,6 +361,9 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
         session.current_narrative = narrative
         session.turn += 1
 
+        # Shorten narrative — ask Groq for concise output (max 800 chars displayed)
+        display_narrative = _truncate(narrative, 800)
+
         img_url = await generate_image(
             data.get("image_prompt") or narrative[:120]
         )
@@ -375,16 +378,21 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
 
         await save_session(session)
 
-        # Send narrative — split into image + text to avoid caption limit
-        short_caption = f"📜 *Turn {session.turn}*"
+        # Send image WITH narrative as caption (max 1024 chars for caption)
+        turn_header   = f"📜 *Turn {session.turn}*\n\n"
+        full_caption  = turn_header + display_narrative
+        # If still too long for caption, trim further
+        safe_caption  = _truncate(full_caption, CAPTION_LIMIT)
+
         if img_url:
-            await update.effective_chat.send_photo(img_url, caption=short_caption, parse_mode=ParseMode.MARKDOWN)
-            await update.effective_chat.send_message(
-                _truncate(narrative, NARRATIVE_LIMIT), parse_mode=ParseMode.MARKDOWN
+            await update.effective_chat.send_photo(
+                img_url,
+                caption=safe_caption,
+                parse_mode=ParseMode.MARKDOWN
             )
         else:
             await update.effective_chat.send_message(
-                f"📜 *Turn {session.turn}*\n\n{_truncate(narrative, NARRATIVE_LIMIT)}",
+                safe_caption,
                 parse_mode=ParseMode.MARKDOWN
             )
 
@@ -507,24 +515,33 @@ async def cb_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def cb_free_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query  = update.callback_query
-    await query.answer()
     sid    = query.data.split(":")[1]
     tid    = query.from_user.id
     player = await load_player(tid)
     if not player:
+        await query.answer()
         return
     if player.free_actions_left <= 0:
         await query.answer("❌ No free actions left this session!", show_alert=True)
         return
 
-    # Ignore if already acted
     session = await load_session(sid)
     if session and str(tid) in session.pending_actions:
         await query.answer("You already chose an action this turn!", show_alert=True)
         return
 
+    await query.answer("✍️ Free action mode — type your action below.")
+
+    # Mark that this player is doing a free action AND remove the choice buttons
     ctx.user_data["freeact_session"]  = sid
     ctx.user_data["awaiting_freeact"] = True
+
+    # Edit the choices message to remove buttons so player can't also pick an option
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     await query.message.reply_text(
         f"✍️ *Free Action* ({player.free_actions_left} remaining)\nDescribe your action:",
         parse_mode=ParseMode.MARKDOWN
@@ -615,4 +632,4 @@ async def cb_perk(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await save_player(player)
     await query.edit_message_text(
         f"✨ *{player.char_name}* learned: *{perk}*!", parse_mode=ParseMode.MARKDOWN
-                          )
+    )
