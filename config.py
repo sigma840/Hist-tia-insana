@@ -4,22 +4,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-GEMINI_API_KEY  = os.environ["GEMINI_API_KEY"]
+GROQ_API_KEY   = os.environ["GROQ_API_KEY"]
 
 POLLINATIONS_URL = "https://image.pollinations.ai/prompt/{prompt}?width=800&height=450&nologo=true"
 
 # Session settings
-MAX_TURNS_PER_SESSION   = 30
+MAX_TURNS_PER_SESSION    = 30
 FREE_ACTIONS_PER_SESSION = 3
-TURN_TIMEOUT_SECONDS    = 120
+TURN_TIMEOUT_SECONDS     = 120
 
 # Dungeon
 DUNGEON_MIN_ROOMS = 5
 DUNGEON_MAX_ROOMS = 12
 
 # Economy
-GOLD_PER_GOOD_ACTION   = (5, 20)
-GOLD_PER_KILL          = (10, 50)
+GOLD_PER_GOOD_ACTION     = (5, 20)
+GOLD_PER_KILL            = (10, 50)
 AUCTION_DURATION_SECONDS = 300
 
 # Sanity
@@ -51,7 +51,6 @@ RARITY_COLORS = {
     "Alive":     "🌀",
 }
 
-# Classes with base stats: hp, strength, magic, agility, luck, sanity
 CLASSES = {
     "Warrior":      {"hp": 120, "strength": 18, "magic":  2, "agility":  8, "luck":  5, "sanity":  90, "emoji": "⚔️",  "desc": "Unstoppable force on the battlefield."},
     "Mage":         {"hp":  70, "strength":  4, "magic": 20, "agility":  9, "luck":  7, "sanity":  85, "emoji": "🔮",  "desc": "Master of arcane forces."},
@@ -67,11 +66,6 @@ CLASSES = {
     "Oracle":       {"hp":  65, "strength":  3, "magic": 18, "agility":  8, "luck": 20, "sanity":  75, "emoji": "🔯",  "desc": "Sees threads of fate, bends probability."},
 }
 
-# Factions
-FACTIONS = ["Crown", "Thieves Guild", "Mage Order", "Church of Light"]
-
-# Day/Night cycle (real hours UTC)
+FACTIONS     = ["Crown", "Thieves Guild", "Mage Order", "Church of Light"]
 DAYTIME_HOURS = range(6, 20)
-
-# World events scheduler interval (minutes)
 WORLD_EVENT_INTERVAL_MINUTES = 60
