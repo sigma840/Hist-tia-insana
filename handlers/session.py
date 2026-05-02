@@ -111,6 +111,54 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
+async def cb_pick_class(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query    = update.callback_query
+    await query.answer()
+    cls_name = query.data.split(":")[1]
+    stats    = CLASSES[cls_name]
+    ctx.user_data["pending_class"] = cls_name
+    await query.edit_message_text(
+        f"{stats['emoji']} *{cls_name}* selected!\n\n"
+        f"_{stats['desc']}_\n\n"
+        f"HP:{stats['hp']} | STR:{stats['strength']} | MAG:{stats['magic']} | "
+        f"AGI:{stats['agility']} | LCK:{stats['luck']} | SAN:{stats['sanity']}\n\n"
+        f"Now send me your *character name*:",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    ctx.user_data["awaiting_name"] = True
+
+
+async def handle_name_input(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not ctx.user_data.get("awaiting_name"):
+        return
+    tid      = update.effective_user.id
+    name     = update.message.text.strip()[:32]
+    cls_name = ctx.user_data.pop("pending_class")
+    ctx.user_data.pop("awaiting_name")
+    stats    = CLASSES[cls_name]
+
+    p = Player(
+        telegram_id=tid,
+        username=update.effective_user.username or str(tid),
+        char_name=name,
+        char_class=cls_name,
+        hp=stats["hp"], max_hp=stats["hp"],
+        strength=stats["strength"], magic=stats["magic"],
+        agility=stats["agility"], luck=stats["luck"],
+        sanity=stats["sanity"], gold=50
+    )
+    await save_player(p)
+    img = await generate_image(f"Portrait of a {cls_name} named {name}, dark fantasy oil painting, dramatic lighting")
+    if img:
+        await update.message.reply_photo(img)
+    await update.message.reply_text(
+        f"✅ *{name}* the *{cls_name}* has entered the world of Chronicler!\n\n"
+        f"Your legend begins\\. Use /newsession to start your first adventure\\.\n"
+        f"Type /help to see all available commands\\.",
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+
 # ── /newsession ───────────────────────────────────────────────
 
 async def cmd_new_session(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
