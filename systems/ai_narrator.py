@@ -77,9 +77,8 @@ RULES:
 
 
 async def narrate_turn(session: Session, players: list, actions: dict) -> dict:
-    system = "You are the narrator of CHRONICLER, a dark medieval fantasy RPG. Be vivid, immersive, and dramatic."
     prompt = _build_context(session, players, actions)
-    text   = _chat(prompt, system=system, max_tokens=1200)
+    text   = _chat(prompt, system=SYSTEM_PROMPT, max_tokens=1400)
 
     # Split narrative from JSON
     narrative, data = text, {}
