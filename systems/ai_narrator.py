@@ -63,13 +63,13 @@ Time: {'DAY' if session.day_night == 'day' else 'NIGHT'} | Weather: {session.wea
 Prophecy: "{session.prophecy}"
 
 RULES:
-- Write 2-4 paragraphs of vivid, immersive narrative responding to ALL player actions
+- Write EXACTLY 2 short paragraphs of narrative (max 60 words each). Be vivid but concise.
 - Show consequences of karma (villainous players cause fear; heroes inspire hope)
 - NIGHT: undead, thieves, secret societies. DAY: merchants, guards, intrigue.
 - Players may LOSE or FIND items naturally in the scene
 - Reference past memories when dramatically relevant
 - If sanity is low, distort that player's perception subtly
-- End with exactly 4 numbered choices: 1. [action] 2. [action] 3. [action] 4. [action]
+- End with exactly 4 numbered choices (max 8 words each): 1. [action] 2. [action] 3. [action] 4. [action]
 - After the choices, output ONLY a JSON block (no markdown fences) with this exact structure:
 {{"gold_earned":{{"player_id":0}},"xp_earned":{{"player_id":0}},"items_lost":[{{"player_id":0,"item_name":"","reason":""}}],"items_found":[{{"player_id":0,"name":"","type":"weapon","rarity":"Common","description":"","stat_bonus":{{}}}}],"sanity_changes":{{"player_id":0}},"karma_changes":{{"player_id":0}},"faction_changes":{{"player_id":{{}}}},"combat_triggered":false,"enemy_name":"","enemy_hp":0,"enemy_strength":0,"taming_opportunity":{{"creature_name":"","creature_species":"","player_id":0}},"dungeon_triggered":false,"image_prompt":""}}"""
 
@@ -77,7 +77,7 @@ RULES:
 async def narrate_turn(session: Session, players: list, actions: dict) -> dict:
     system = "You are the narrator of CHRONICLER, a dark medieval fantasy RPG. Be vivid, immersive, and dramatic."
     prompt = _build_context(session, players, actions)
-    text   = _chat(prompt, system=system, max_tokens=2000)
+    text   = _chat(prompt, system=system, max_tokens=900)
 
     # Split narrative from JSON
     narrative, data = text, {}
