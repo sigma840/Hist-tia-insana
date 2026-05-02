@@ -309,7 +309,9 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
 
         for p in players:
             pid = str(p.telegram_id)
-            p.gold += data.get("gold_earned", {}).get(pid, 0)
+            gold_earned = data.get("gold_earned", {}).get(pid, 0)
+            gold_spent  = data.get("gold_spent",  {}).get(pid, 0)
+            p.gold = max(0, p.gold + gold_earned - gold_spent)
 
             xp_gain = data.get("xp_earned", {}).get(pid, 0)
             if xp_gain:
@@ -337,12 +339,15 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
                             break
 
             for found in data.get("items_found", []):
-                if str(found.get("player_id")) == pid:
+                # Accept both int and string player_id keys
+                found_pid = str(found.get("player_id", found.get("player_telegram_id", "")))
+                if found_pid == pid:
                     rarity = found.get("rarity", _roll_rarity())
                     item   = Item(
                         id=new_id(), name=found["name"],
                         description=found.get("description", ""),
-                        rarity=rarity, item_type=found.get("type", "weapon"),
+                        rarity=rarity,
+                        item_type=found.get("type", found.get("item_type", "consumable")),
                         stat_bonus=found.get("stat_bonus", {}),
                         owner_id=p.telegram_id,
                         acquired_session=session.session_id
@@ -351,7 +356,7 @@ async def run_turn(update, ctx, session: Session, players: list, actions: dict):
                     p.inventory.append(item.id)
                     emoji = RARITY_COLORS.get(rarity, "⬜")
                     await update.effective_chat.send_message(
-                        f"🎁 *{p.char_name}* found: {emoji} *{item.name}* ({rarity})\n_{item.description}_",
+                        f"🎁 *{p.char_name}* obtained: {emoji} *{item.name}* ({rarity})\n_{item.description}_",
                         parse_mode=ParseMode.MARKDOWN
                     )
 
@@ -513,6 +518,9 @@ async def cb_free_action(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     tid    = query.from_user.id
     player = await load_player(tid)
     if not player:
+        await query.answer()
+        return
+    if player.free_actions_left <= 0:
         await query.answer("❌ No free actions left this session!", show_alert=True)
         return
 
