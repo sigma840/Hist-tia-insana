@@ -1,39 +1,49 @@
 import asyncio
 import random
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from telegram.constants import ParseMode
+
 from config import WORLD_EVENT_INTERVAL_MINUTES
-from database.db import all_players, get_world, set_world, save_player, load_player
+from database.db import all_players, get_world, set_world
 from systems.ai_narrator import generate_world_event, generate_dream, generate_npc_letter
 from systems.image_gen import generate_image
 
+# Scheduler global — será iniciado dentro do event loop do PTB
 scheduler = AsyncIOScheduler()
 
 
-def start_scheduler(bot):
+def setup_scheduler(bot):
+    """Regista os jobs mas NÃO inicia o scheduler aqui."""
     scheduler.add_job(
         lambda: asyncio.create_task(world_event_tick(bot)),
-        "interval", minutes=WORLD_EVENT_INTERVAL_MINUTES
+        "interval", minutes=WORLD_EVENT_INTERVAL_MINUTES, id="world_event"
     )
     scheduler.add_job(
         lambda: asyncio.create_task(send_dreams(bot)),
-        "cron", hour=3
+        "cron", hour=3, id="dreams"
     )
     scheduler.add_job(
         lambda: asyncio.create_task(send_npc_letters(bot)),
-        "interval", hours=6
+        "interval", hours=6, id="npc_letters"
     )
+
+
+async def start_scheduler_async(bot):
+    """Inicia o scheduler dentro do event loop ativo — chamado pelo post_init do PTB."""
+    setup_scheduler(bot)
     scheduler.start()
+    print("📅 Scheduler started inside event loop.")
 
 
 async def world_event_tick(bot):
     history = await get_world("event_history", [])
-    event = await generate_world_event(history)
-    img = await generate_image(event.get("image_prompt", "medieval castle"))
+    event   = await generate_world_event(history)
+    img     = await generate_image(event.get("image_prompt", "medieval castle"))
     history.append(event.get("title", ""))
     await set_world("event_history", history[-20:])
 
-    players = await all_players()
+    players  = await all_players()
     notified = set()
     for p in players:
         if p.telegram_id in notified:
@@ -69,7 +79,7 @@ async def send_dreams(bot):
 
 
 async def send_npc_letters(bot):
-    players = await all_players()
+    players  = await all_players()
     eligible = [p for p in players if p.memories and random.random() < 0.3]
     for p in eligible:
         try:
